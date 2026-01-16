@@ -1,1 +1,0 @@
-# NTU GPU Programming

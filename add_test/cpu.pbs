@@ -1,0 +1,23 @@
+#!/bin/bash
+#PBS -q normal
+#PBS -N serial_job
+#PBS -l select=1:ncpus=1:mem=1gb
+#PBS -l walltime=00:10:00
+#PBS -j oe
+#PBS -P personal-btan138
+
+echo "Print Hostname"
+hostname
+
+echo -e "\n\n Which module in this job."
+module list 2>&1
+
+echo -e "\n\n what is the environment."
+printenv
+cd ${PBS_O_WORKDIR}
+echo -e "my work folder is $PWD\n\n"
+echo
+
+echo The job $PBS_JOBNAME is running on `cat $PBS_NODEFILE`.
+echo The job use $NCPUS CPU core\(s\) and $OMP_NUM_THREADS OpenMP thread\(s\).
+sleep 1
