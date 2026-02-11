@@ -1,0 +1,22 @@
+#!/bin/bash
+
+#PBS -l select=1:mpiprocs=1:ngpus=1
+#PBS -l place=scatter
+#PBS -l walltime=4:00:00
+#PBS -o log/
+#PBS -j oe
+#PBS -P personal-btan138
+#PBS -q normal
+#PBS -N gpuJob
+
+cd $PBS_O_WORKDIR || exit $? 
+[ -d log ] || mkdir log  
+module swap PrgEnv-cray PrgEnv-nvhpc
+module rm cray-libsci
+echo $CUDA_VISIBLE_DEVICES
+## if the app is not be made, un-comment the make command. 
+# make
+./p2
+
+# mpirun -np 1 ./mpi_gpu
+
