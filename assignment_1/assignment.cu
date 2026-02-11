@@ -72,10 +72,12 @@ void q1()
     CUDA_CHECK(cudaEventRecord(start, 0));
 
     q1_add<<<gridSize, bs>>>(x, y, sum);
+    CUDA_CHECK(cudaGetLastError()); 
 
     // Measure elapsed time
     CUDA_CHECK(cudaEventRecord(stop, 0));
     CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaGetLastError()); 
 
     float elapsedTime;
     CUDA_CHECK(cudaEventElapsedTime(&elapsedTime, start, stop));
@@ -190,10 +192,12 @@ void q2()
     CUDA_CHECK(cudaEventRecord(start, 0));
 
     q2_add_1d<<<gridSize, bs>>>(x, y, sum);
+    CUDA_CHECK(cudaGetLastError()); 
 
     // Measure elapsed time
     CUDA_CHECK(cudaEventRecord(stop, 0));
     CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaGetLastError()); 
 
     float elapsedTime;
     CUDA_CHECK(cudaEventElapsedTime(&elapsedTime, start, stop));
@@ -227,10 +231,12 @@ void q2()
     CUDA_CHECK(cudaEventRecord(start, 0));
 
     q2_add_2d<<<gridSize, bs>>>(x, y, sum);
+    CUDA_CHECK(cudaGetLastError()); 
 
     // Measure elapsed time
     CUDA_CHECK(cudaEventRecord(stop, 0));
     CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaGetLastError()); 
 
     float elapsedTime;
     CUDA_CHECK(cudaEventElapsedTime(&elapsedTime, start, stop));
@@ -332,7 +338,6 @@ void q3()
     dim3(8, 8),
     dim3(16, 16),
     dim3(32, 32),
-    dim3(64, 64),
   };
   for (dim3 bs : blockSizes2D)
   {
@@ -347,15 +352,17 @@ void q3()
     CUDA_CHECK(cudaEventRecord(start, 0));
 
     q3_naive_mul<<<gridSize, bs>>>(x, y, result);
+    CUDA_CHECK(cudaGetLastError()); 
     CUDA_CHECK(cudaEventRecord(stop, 0));
-    CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaEventSynchronize(stop));
+    CUDA_CHECK(cudaGetLastError()); 
 
     float elapsedTime;
     CUDA_CHECK(cudaEventElapsedTime(&elapsedTime, start, stop));
 
     float seconds = elapsedTime / 1000.0f;
-    long long flops = M * N * K; // One add operation per element
-    double gFlops = (flops / seconds) / 1e9;
+    long long flops = M * N * K * 2; // One multiply and one add per element (2 FLOPs)
+    double gFlops = (seconds > 0.0f) ? ((double)flops / seconds) / 1e9 : 0.0;
     std::cout << "Block Size: (" << bs.x << ", " << bs.y << "), Time: " << elapsedTime << " ms, FLOPs: " << gFlops << std::endl;
   }
 }
