@@ -83,9 +83,9 @@ void q1()
     CUDA_CHECK(cudaEventElapsedTime(&elapsedTime, start, stop));
 
     float seconds = elapsedTime / 1000.0f;
-    long long flops = N; // One add operation per element
-    double gFlops = (flops / seconds) / 1e9;
-    std::cout << "Block Size: " << bs << ", Time: " << elapsedTime << " ms, FLOPs: " << gFlops << std::endl;
+    long long _flops = N; // One add operation per element
+    double flops = (seconds > 0.0f) ? ((double)_flops / seconds) : 0.0;
+    std::cout << "Block Size: " << bs << ", Time: " << elapsedTime << " ms, FLOPs: " << flops << std::endl;
   }
   if (verifyResult(x, y, sum, N))
   {

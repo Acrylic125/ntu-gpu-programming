@@ -16,47 +16,22 @@
     }                                                       \
   } while (0)
 
-// Problem 1. Vector Addition (2 Marks)
-__global__ void q1_add(float *x, float *y, float *sum)
-{
-  int i = threadIdx.x + blockDim.x * blockIdx.x;
-  sum[i] = x[i] + y[i];
-}
-
-bool verifyResult(float *a, float *b, float *c, int n)
-{
-  for (int i = 0; i < n; i++)
-  {
-    float expected = a[i] + b[i];
-    if (fabs(c[i] - expected) > 1e-5)
-    {
-      printf("Verification failed at index %d: expected %f, got %f\n",
-             i, expected, c[i]);
-      return false;
-    }
-  }
-  return true;
-}
-
-
 #define MatrixSize_M 8192
 #define MatrixSize_N 8192
-#define MatrixSize_K 8192
 
 // Problem 2. Matrix Addition (3 Marks)
 // 1d grid and block
-__global__ void q2_add_1d(float x[MatrixSize_N][MatrixSize_M], float y[MatrixSize_N][MatrixSize_M], float sum[MatrixSize_N][MatrixSize_M])
+__global__ void q2_add_1d(
+  float x[MatrixSize_N][MatrixSize_M],
+   float y[MatrixSize_N][MatrixSize_M],
+    float sum[MatrixSize_N][MatrixSize_M])
 {
   int i = threadIdx.x + blockDim.x * blockIdx.x;
 
-  int total = MatrixSize_N * MatrixSize_M;
-  if (i < total)
-  {
-    int row = i / MatrixSize_M;
-    int col = i % MatrixSize_M;
+  int row = i / MatrixSize_M;
+  int col = i % MatrixSize_M;
 
-    sum[row][col] = x[row][col] + y[row][col];
-  }
+  sum[row][col] = x[row][col] + y[row][col];
 }
 
 // 2d grid and block
@@ -140,9 +115,9 @@ void q2()
     CUDA_CHECK(cudaEventElapsedTime(&elapsedTime, start, stop));
 
     float seconds = elapsedTime / 1000.0f;
-    long long flops = M * N; // One add operation per element
-    double gFlops = (flops / seconds) / 1e9;
-    std::cout << "Block Size: " << bs << ", Time: " << elapsedTime << " ms, FLOPs: " << gFlops << std::endl;
+    long long _flops = M * N; // One add operation per element
+    double flops = (seconds > 0.0f) ? ((double)_flops / seconds) : 0.0;
+    std::cout << "Block Size: " << bs << ", Time: " << elapsedTime << " ms, FLOPs: " << flops << std::endl;
   }
   if (verifyResultMatrix(x, y, sum))
   {
@@ -179,9 +154,9 @@ void q2()
     CUDA_CHECK(cudaEventElapsedTime(&elapsedTime, start, stop));
 
     float seconds = elapsedTime / 1000.0f;
-    long long flops = N * M; // One add operation per element
-    double gFlops = (flops / seconds) / 1e9;
-    std::cout << "Block Size: (" << bs.x << ", " << bs.y << "), Time: " << elapsedTime << " ms, FLOPs: " << gFlops << std::endl;
+    long long _flops = N * M; // One add operation per element
+    double flops = (seconds > 0.0f) ? ((double)_flops / seconds) : 0.0;
+    std::cout << "Block Size: (" << bs.x << ", " << bs.y << "), Time: " << elapsedTime << " ms, FLOPs: " << flops << std::endl;
   }
   if (verifyResultMatrix(x, y, sum))
   {

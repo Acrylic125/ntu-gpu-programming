@@ -124,9 +124,10 @@ void q3()
     CUDA_CHECK(cudaEventElapsedTime(&elapsedTime, start, stop));
 
     float seconds = elapsedTime / 1000.0f;
-    long long flops = M * N * K * 2; // One multiply and one add per element (2 FLOPs)
-    double gFlops = (seconds > 0.0f) ? ((double)flops / seconds) / 1e9 : 0.0;
-    std::cout << "Block Size: (" << bs.x << ", " << bs.y << "), Time: " << elapsedTime << " ms, FLOPs: " << gFlops << std::endl;
+    // One multiply and one add per element (2 FLOPs)
+    long long _flops = (long long)M * N * K * 2LL; 
+    double flops = (seconds > 0.0f) ? ((double)_flops / seconds) : 0.0;
+    std::cout << "Block Size: (" << bs.x << ", " << bs.y << "), Time: " << elapsedTime << " ms, FLOPs: " << flops << std::endl;
   }
 }
 
