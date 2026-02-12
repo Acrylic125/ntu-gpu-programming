@@ -100,7 +100,7 @@ void q2()
   // When we convert it to 2D, we will consider the same number
   // of total threads.
   int blockSizes[] = {
-    16,
+    32,
     64, 
     256, 
     1024
@@ -141,11 +141,9 @@ void q2()
   std::cout << "2D Grid and Block:" << std::endl;
   // Equiv. number of threads in 1D.
   dim3 blockSizes2D[] = {
-    // Duplicate to prove theres some initial overhead.
-    dim3(4, 4),
-    dim3(4, 4),
-    dim3(16, 1),
-    dim3(1, 16),
+    dim3(4, 8),
+    dim3(32, 1),
+    dim3(1, 32),
     dim3(8, 8),
     dim3(64, 1),
     dim3(1, 64),

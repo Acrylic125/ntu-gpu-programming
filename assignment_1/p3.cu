@@ -24,8 +24,7 @@
 #define MatrixSize_K 8192
 
 
-// Naive implementation of matrix multiplication
-__global__ void q3_naive_mul(
+__global__ void q3_mul(
   float x[MatrixSize_M][MatrixSize_K],
    float y[MatrixSize_K][MatrixSize_N], 
   float result[MatrixSize_M][MatrixSize_N])
@@ -88,11 +87,9 @@ void q3()
   CUDA_CHECK(cudaMemcpy(result, h_result, size_result, cudaMemcpyHostToDevice));
 
   dim3 blockSizes2D[] = {
-    // Duplicate to prove theres some initial overhead.
-    dim3(4, 4),
+    // 16
     dim3(4, 4),
     // 32
-    dim3(1, 32),
     dim3(4, 8),
     // 64
     dim3(8, 8),
@@ -113,7 +110,7 @@ void q3()
     CUDA_CHECK(cudaEventCreate(&stop));
     CUDA_CHECK(cudaEventRecord(start, 0));
 
-    q3_naive_mul<<<gridSize, bs>>>(x, y, result);
+    q3_mul<<<gridSize, bs>>>(x, y, result);
     CUDA_CHECK(cudaGetLastError()); 
     CUDA_CHECK(cudaEventRecord(stop, 0));
     CUDA_CHECK(cudaEventSynchronize(stop));
