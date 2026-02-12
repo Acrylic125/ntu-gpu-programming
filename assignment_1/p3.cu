@@ -39,67 +39,66 @@ __global__ void q3_naive_mul(
   }
 }
 
-
-// __global__ void q3_tensor_core_mul(
-//   float x[MatrixSize_M][MatrixSize_K],
-//   float y[MatrixSize_K][MatrixSize_N],
-//   float result[MatrixSize_M][MatrixSize_N])
-// {
-//   wmma::fragment<wmma::matrix_a, 16, 16, 16, wmma::precision::tf32, wmma::row_major> a_frag;
-//   wmma::fragment<wmma::matrix_b, 16, 16, 16, wmma::precision::tf32, wmma::row_major> b_frag;
-//   wmma::fragment<wmma::accumulator, 16, 16, 16, float> c_frag, d_frag;
-
-//   wmma::load_matrix_sync(a_frag, x, 16);
-//   wmma::load_matrix_sync(b_frag, y, 16);
-//   wmma::fill_fragment(c_frag, 0.0f);
-
-//   wmma::mma_sync(d_frag, a_frag, b_frag, c_frag);
-
-//   wmma::store_matrix_sync(result, d_frag, 16, wmma::row_major);
-// }
-
 void q3()
 {
   // Rand
   std::random_device rd;
   std::mt19937 engine(rd());
-  std::uniform_real_distribution<float> dist(0.0f, 10.0f);
-
-  float (*x)[MatrixSize_M];
-  float (*y)[MatrixSize_K];
-  float (*result)[MatrixSize_N];
+  std::uniform_real_distribution<float> dist(0.0f, 1.0f);
 
   int M = MatrixSize_M;
   int N = MatrixSize_N;
   int K = MatrixSize_K;
+  size_t size_x = M * K * sizeof(float);
+  size_t size_y = K * N * sizeof(float);
+  size_t size_result = M * N * sizeof(float);
 
-  CUDA_CHECK(cudaMallocManaged(&x, M * K * sizeof(float)));
-  CUDA_CHECK(cudaMallocManaged(&y, K * N * sizeof(float)));
-  CUDA_CHECK(cudaMallocManaged(&result, M * N * sizeof(float)));
+  float (*x)[MatrixSize_K], (*h_x)[MatrixSize_K];
+  float (*y)[MatrixSize_N], (*h_y)[MatrixSize_N];
+  float (*result)[MatrixSize_N], (*h_result)[MatrixSize_N];
+
+  h_x = (float (*)[MatrixSize_K])malloc(size_x);
+  h_y = (float (*)[MatrixSize_N])malloc(size_y);
+  h_result = (float (*)[MatrixSize_N])malloc(size_result);
 
   for (int i = 0; i < M; i++)
   {
     for (int j = 0; j < K; j++)
     {
-      x[i][j] = dist(engine);
+      h_x[i][j] = dist(engine);
     }
     for (int j = 0; j < N; j++)
     {
-      result[i][j] = 0;
+      h_result[i][j] = 0;
     }
   }
   for (int i = 0; i < K; i++)
   {
     for (int j = 0; j < N; j++)
     {
-      y[i][j] = dist(engine);
+      h_y[i][j] = dist(engine);
     }
   }
 
+  CUDA_CHECK(cudaMalloc((void**) &x, size_x));
+  CUDA_CHECK(cudaMalloc((void**) &y, size_y));
+  CUDA_CHECK(cudaMalloc((void**) &result, size_result));
+  CUDA_CHECK(cudaMemcpy(x, h_x, size_x, cudaMemcpyHostToDevice));
+  CUDA_CHECK(cudaMemcpy(y, h_y, size_y, cudaMemcpyHostToDevice));
+  CUDA_CHECK(cudaMemcpy(result, h_result, size_result, cudaMemcpyHostToDevice));
+
   dim3 blockSizes2D[] = {
+    // Duplicate to prove theres some initial overhead.
     dim3(4, 4),
+    dim3(4, 4),
+    // 32
+    dim3(1, 32),
+    dim3(4, 8),
+    // 64
     dim3(8, 8),
+    // 128
     dim3(16, 16),
+    // 256
     dim3(32, 32),
   };
   for (dim3 bs : blockSizes2D)

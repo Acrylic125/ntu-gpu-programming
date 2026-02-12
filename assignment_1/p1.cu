@@ -43,24 +43,39 @@ void q1()
   // Rand
   std::random_device rd;
   std::mt19937 engine(rd());
-  std::uniform_real_distribution<float> dist(0.0f, 10.0f);
+  std::uniform_real_distribution<float> dist(0.0f, 100.0f);
 
   int N = 1 << 30;
+  size_t arrSize = N * sizeof(float);
 
-  float *x, *y, *sum;
-  CUDA_CHECK(cudaMallocManaged(&x, N * sizeof(float)));
-  CUDA_CHECK(cudaMallocManaged(&y, N * sizeof(float)));
-  CUDA_CHECK(cudaMallocManaged(&sum, N * sizeof(float)));
+  float *h_x, *h_y, *h_sum, *x, *y, *sum;
+  h_x = (float *)malloc(arrSize);
+  h_y = (float *)malloc(arrSize);
+  h_sum = (float *)malloc(arrSize);
 
   for (int i = 0; i < N; i++)
   {
-    x[i] = dist(engine);
-    y[i] = dist(engine);
-    sum[i] = 0;
+    h_x[i] = dist(engine);
+    h_y[i] = dist(engine);
+    h_sum[i] = 0;
   }
 
+  CUDA_CHECK(cudaMalloc((void**) &x, arrSize));
+  CUDA_CHECK(cudaMalloc((void**) &y, arrSize));
+  CUDA_CHECK(cudaMalloc((void**) &sum, arrSize));
+  CUDA_CHECK(cudaMemcpy(x, h_x, N * sizeof(float), cudaMemcpyHostToDevice));
+  CUDA_CHECK(cudaMemcpy(y, h_y, N * sizeof(float), cudaMemcpyHostToDevice));
+  CUDA_CHECK(cudaMemcpy(sum, h_sum, N * sizeof(float), cudaMemcpyHostToDevice));  
+
   // block threads sizes to test, 32, 64, 128, 256
-  int blockSizes[] = {32, 64, 128, 256};
+  int blockSizes[] = {
+      32,
+      64, 
+      128, 
+      256,
+      512,
+      1024
+  };
   for (int bs : blockSizes)
   {
     int gridSize = (N + bs - 1) / bs;
@@ -87,7 +102,11 @@ void q1()
     double flops = (seconds > 0.0f) ? ((double)_flops / seconds) : 0.0;
     std::cout << "Block Size: " << bs << ", Time: " << elapsedTime << " ms, FLOPs: " << flops << std::endl;
   }
-  if (verifyResult(x, y, sum, N))
+
+  // Copy sum back to host
+  CUDA_CHECK(cudaMemcpy(h_sum, sum, N * sizeof(float), cudaMemcpyDeviceToHost));
+
+  if (verifyResult(h_x, h_y, h_sum, N))
   {
     std::cout << "Verification passed!" << std::endl;
   }
@@ -100,8 +119,10 @@ void q1()
   CUDA_CHECK(cudaFree(x));
   CUDA_CHECK(cudaFree(y));
   CUDA_CHECK(cudaFree(sum));
+  free(h_x);
+  free(h_y);
+  free(h_sum);
 }
-
 
 int main()
 {
