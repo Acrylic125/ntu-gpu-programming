@@ -9,6 +9,10 @@
 #include <random>
 #include <mma.h>
 
+// Tile size (must match launch configuration)
+#define BLOCK_X 32
+#define BLOCK_Y 32
+
 #define CUDA_CHECK(call)                                    \
   do                                                        \
   {                                                         \
@@ -22,12 +26,8 @@
   } while (0)
 
 
-/**
-Max 2048 threads per SM
-L1 Cache 192 KB per SM
-*/
 __global__
-void wave2D_global(
+void wave2D_shared(
   const double* prev,
   const double* cur,
   double* next,
@@ -35,28 +35,100 @@ void wave2D_global(
   double lambda2
 )
 {
-  int j = blockIdx.x * blockDim.x + threadIdx.x; 
-  int i = blockIdx.y * blockDim.y + threadIdx.y; 
-  
+  // Global indices
+  const int j = blockIdx.x * blockDim.x + threadIdx.x; 
+  const int i = blockIdx.y * blockDim.y + threadIdx.y; 
+
+  // Local indices in shared tile (offset by 1 for halo)
+  const int tx = threadIdx.x;
+  const int ty = threadIdx.y;
+
+  __shared__ double tile[BLOCK_Y + 2][BLOCK_X + 2];
+
+  // Load center point
+  if (i < N && j < N)
+    tile[ty + 1][tx + 1] = cur[i * N + j];
+  else
+    tile[ty + 1][tx + 1] = 0.0;
+
+  // Load halos in x-direction
+  if (tx == 0) {
+    int j_left = j - 1;
+    tile[ty + 1][0] = (i >= 0 && i < N && j_left >= 0)
+        ? cur[i * N + j_left]
+        : 0.0;
+  }
+  if (tx == blockDim.x - 1) {
+    int j_right = j + 1;
+    tile[ty + 1][BLOCK_X + 1] = (i >= 0 && i < N && j_right < N)
+        ? cur[i * N + j_right]
+        : 0.0;
+  }
+
+  // Load halos in y-direction
+  if (ty == 0) {
+    int i_up = i - 1;
+    tile[0][tx + 1] = (i_up >= 0 && j >= 0 && j < N)
+        ? cur[i_up * N + j]
+        : 0.0;
+  }
+  if (ty == blockDim.y - 1) {
+    int i_down = i + 1;
+    tile[BLOCK_Y + 1][tx + 1] = (i_down < N && j >= 0 && j < N)
+        ? cur[i_down * N + j]
+        : 0.0;
+  }
+
+  // Corners of the tile
+  if (tx == 0 && ty == 0) {
+    int i_up = i - 1;
+    int j_left = j - 1;
+    tile[0][0] = (i_up >= 0 && j_left >= 0)
+        ? cur[i_up * N + j_left]
+        : 0.0;
+  }
+  if (tx == blockDim.x - 1 && ty == 0) {
+    int i_up = i - 1;
+    int j_right = j + 1;
+    tile[0][BLOCK_X + 1] = (i_up >= 0 && j_right < N)
+        ? cur[i_up * N + j_right]
+        : 0.0;
+  }
+  if (tx == 0 && ty == blockDim.y - 1) {
+    int i_down = i + 1;
+    int j_left = j - 1;
+    tile[BLOCK_Y + 1][0] = (i_down < N && j_left >= 0)
+        ? cur[i_down * N + j_left]
+        : 0.0;
+  }
+  if (tx == blockDim.x - 1 && ty == blockDim.y - 1) {
+    int i_down = i + 1;
+    int j_right = j + 1;
+    tile[BLOCK_Y + 1][BLOCK_X + 1] = (i_down < N && j_right < N)
+        ? cur[i_down * N + j_right]
+        : 0.0;
+  }
+
+  __syncthreads();
+
   // Only update interior points
   if (i > 0 && i < N - 1 && j > 0 && j < N - 1)
   {
-    int idx = i * N + j;
-  
-    double center = cur[idx];
-  
-    double up    = cur[(i - 1) * N + j];
-    double down  = cur[(i + 1) * N + j];
-    double left  = cur[i * N + (j - 1)];
-    double right = cur[i * N + (j + 1)];
-  
+    const int idx = i * N + j;
+
+    double center = tile[ty + 1][tx + 1];
+    double up     = tile[ty    ][tx + 1];
+    double down   = tile[ty + 2][tx + 1];
+    double left   = tile[ty + 1][tx    ];
+    double right  = tile[ty + 1][tx + 2];
+
     next[idx] =
         2.0 * center
         - prev[idx]
         // Lambda2 since we assume dx = dy
         + lambda2 * (up + down + left + right - 4.0 * center);
   }
-  
+
   // Boundary = 0 (Dirichlet)
   if (i < N && j < N && (i == 0 || i == N - 1 || j == 0 || j == N - 1))
   {
@@ -154,7 +226,7 @@ void qA1(bool saveSnapshots)
       }
       if (step == 0) 
         CUDA_CHECK(cudaEventRecord(start));
-      wave2D_global<<<gridSize, blockSize>>>(d_u_prev, d_u_curr, d_u_next, N, lambda2);
+      wave2D_shared<<<gridSize, blockSize>>>(d_u_prev, d_u_curr, d_u_next, N, lambda2);
       CUDA_CHECK(cudaGetLastError());
       // We will cycle these pointers to avoid memory allocation and deallocation.
       double *tmp = d_u_prev;
