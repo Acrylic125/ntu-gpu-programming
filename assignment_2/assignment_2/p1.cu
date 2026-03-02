@@ -64,11 +64,12 @@ static void save_snapshot(
   std::vector<double>& snapshot_vector,
   int gridPoints,
   int Lk,
-  bool firstSnapshot
+  bool firstSnapshot,
+  std::string fname
 )
 {
   CUDA_CHECK(cudaMemcpy(snapshot_vector.data(), d_u_curr, gridPoints * sizeof(double), cudaMemcpyDeviceToHost));
-  std::string fname = "sim/sim_" + std::to_string(Lk) + ".txt";
+  // std::string fname = "sim/sim_" + std::to_string(Lk) + ".txt";
   std::ofstream out(fname, std::ios::app);
   if (!firstSnapshot)
     out << "\n\n";
@@ -83,6 +84,9 @@ void qA1(bool saveSnapshots)
 {
   if (saveSnapshots) {
     std::system("rm -rf sim 2>/dev/null; mkdir -p sim");
+    std::system("rm -rf results/with_save 2>/dev/null; mkdir -p results/with_save");
+  } else {
+    std::system("rm -rf results/without_save 2>/dev/null; mkdir -p results/without_save");
   }
   int sizes[] = {
     1, 2, 4, 8
@@ -129,7 +133,8 @@ void qA1(bool saveSnapshots)
     dim3 gridSize((N + _blockSize[0] - 1) / _blockSize[0], (N + _blockSize[1] - 1) / _blockSize[1]);
     const int numSteps = (int)(1.0 / dt);
     const int saveInterval = saveSnapshots ? (numSteps / 20) : 0;
-    std::vector<double> snapshot_vector(saveSnapshots ? gridPoints : 0);
+    std::vector<double> snapshot_vector(gridPoints);
+    std::string fname = "sim/sim_" + std::to_string(Lk) + ".txt";
 
     cudaEvent_t start, stop;
     CUDA_CHECK(cudaEventCreate(&start));
@@ -140,11 +145,12 @@ void qA1(bool saveSnapshots)
     for (int step = 0; step < numSteps; step++) {
       if (saveSnapshots && saveInterval > 0 && step % saveInterval == 0) {
         CUDA_CHECK(cudaDeviceSynchronize());
-        save_snapshot(d_u_curr, snapshot_vector, gridPoints, Lk, (step == 0));
+        save_snapshot(d_u_curr, snapshot_vector, gridPoints, Lk, (step == 0), fname);
       }
       if (step == 0) 
         CUDA_CHECK(cudaEventRecord(start));
       wave2D_global<<<gridSize, blockSize>>>(d_u_prev, d_u_curr, d_u_next, N, lambda2);
+      CUDA_CHECK(cudaGetLastError());
       // We will cycle these pointers to avoid memory allocation and deallocation.
       double *tmp = d_u_prev;
       d_u_prev = d_u_curr;
@@ -157,6 +163,13 @@ void qA1(bool saveSnapshots)
     float kernelMs = 0.f;
     CUDA_CHECK(cudaEventElapsedTime(&kernelMs, start, stop));
     std::cout << "Lk " << Lk << ": " << kernelMs << " ms" << std::endl;
+
+    // Save final snapshot to results/with_save or results/without_save
+    CUDA_CHECK(cudaDeviceSynchronize());
+    std::string results_fname = saveSnapshots
+        ? ("results/with_save/sim_" + std::to_string(Lk) + ".txt")
+        : ("results/without_save/sim_" + std::to_string(Lk) + ".txt");
+    save_snapshot(d_u_curr, snapshot_vector, gridPoints, Lk, true, results_fname);
     CUDA_CHECK(cudaEventDestroy(start));
     CUDA_CHECK(cudaEventDestroy(stop));
 
