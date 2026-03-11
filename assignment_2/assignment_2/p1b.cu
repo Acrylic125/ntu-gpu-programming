@@ -103,6 +103,63 @@ void wave2D_shared(
   }
 }
 
+__global__
+void wave2D_shared_with_single_tile_load(
+  const double* prev,
+  const double* cur,
+  double* next,
+  int N,
+  double lambda2
+)
+{
+  const int j = blockIdx.x * blockDim.x + threadIdx.x;
+  const int i = blockIdx.y * blockDim.y + threadIdx.y;
+  const int tx = threadIdx.x;
+  const int ty = threadIdx.y;
+  const int tilePitch = blockDim.x + 2;
+  const int tileHeight = blockDim.y + 2;
+  const int tileElements = tilePitch * tileHeight;
+
+  extern __shared__ double tile[];
+
+  // Only the tx == 0 threads cooperatively load the full tile.
+  if (tx == 0) {
+    for (int linearIdx = ty; linearIdx < tileElements; linearIdx += blockDim.y) {
+      int localRow = linearIdx / tilePitch;
+      int localCol = linearIdx % tilePitch;
+      int globalI = blockIdx.y * blockDim.y + localRow - 1;
+      int globalJ = blockIdx.x * blockDim.x + localCol - 1;
+
+      tile[linearIdx] = (globalI >= 0 && globalI < N && globalJ >= 0 && globalJ < N)
+          ? cur[globalI * N + globalJ]
+          : 0.0;
+    }
+  }
+
+  __syncthreads();
+
+  if (i > 0 && i < N - 1 && j > 0 && j < N - 1)
+  {
+    const int idx = i * N + j;
+
+    double center = tile[(ty + 1) * tilePitch + (tx + 1)];
+    double up     = tile[ty * tilePitch + (tx + 1)];
+    double down   = tile[(ty + 2) * tilePitch + (tx + 1)];
+    double left   = tile[(ty + 1) * tilePitch + tx];
+    double right  = tile[(ty + 1) * tilePitch + (tx + 2)];
+
+    next[idx] =
+        2.0 * center
+        - prev[idx]
+        + lambda2 * (up + down + left + right - 4.0 * center);
+  }
+
+  if (i < N && j < N && (i == 0 || i == N - 1 || j == 0 || j == N - 1))
+  {
+    next[i * N + j] = 0.0;
+  }
+}
+
 static void save_snapshot(
   const double* d_u_curr,
   std::vector<double>& snapshot_vector,
@@ -211,7 +268,9 @@ void qA1(bool saveSnapshots)
         if (step == 0)
           CUDA_CHECK(cudaEventRecord(start));
         size_t sharedBytes = (blockSizeDim + 2) * (blockSizeDim + 2) * sizeof(double);
-        wave2D_shared<<<gridSize, blockSize, sharedBytes>>>(d_u_prev, d_u_curr, d_u_next, N, lambda2);
+        // wave2D_shared<<<gridSize, blockSize, sharedBytes>>>(d_u_prev, d_u_curr, d_u_next, N, lambda2);
+        wave2D_shared_with_single_tile_load<<<gridSize, blockSize, sharedBytes>>>(
+            d_u_prev, d_u_curr, d_u_next, N, lambda2);
         CUDA_CHECK(cudaGetLastError());
         // We will cycle these pointers to avoid memory allocation and deallocation.
         double *tmp = d_u_prev;
@@ -231,7 +290,8 @@ void qA1(bool saveSnapshots)
       double updatesPerSecond =
           (interiorPoints * numSteps) / runtimeSeconds;
       double occupancyPercent =
-          kernel_occupancy_percent((const void*)wave2D_shared, blockSizeDim * blockSizeDim, sharedBytes);
+          kernel_occupancy_percent((const void*)wave2D_shared_with_single_tile_load,
+                                   blockSizeDim * blockSizeDim, sharedBytes);
       std::cout << "Lk " << Lk << ", block " << blockSizeDim << "x" << blockSizeDim
                 << ": " << kernelMs << " ms"
                 << ", bandwidth " << bandwidthGBs << " GB/s"

@@ -105,8 +105,11 @@ void qA1(bool saveSnapshots)
   int sizes[] = {
     1, 2, 4, 8
   };
-  int blockSizes[] = {
-    16, 32
+  int blockSizes[][2] = {
+    {4, 4},
+    {8, 8},
+    {16, 16},
+    {32, 32}
   };
   double dx = 0.01;
   double dy = 0.01;
@@ -137,7 +140,9 @@ void qA1(bool saveSnapshots)
     const int N = gridPointsOnAxis;
     const long long interiorPoints = 1LL * (N - 2) * (N - 2);
     const double bytesPerGridUpdate = 6.0 * sizeof(double);
-    for (int blockSizeDim : blockSizes) {
+    for (const auto& blockSizePair : blockSizes) {
+      int blockSizeX = blockSizePair[0];
+      int blockSizeY = blockSizePair[1];
       double *d_u_prev = nullptr, *d_u_curr = nullptr, *d_u_next = nullptr;
       CUDA_CHECK(cudaMalloc(&d_u_prev, gridPoints * sizeof(double)));
       CUDA_CHECK(cudaMalloc(&d_u_curr, gridPoints * sizeof(double)));
@@ -147,11 +152,12 @@ void qA1(bool saveSnapshots)
       CUDA_CHECK(cudaMemcpy(d_u_curr, &grid[0][0], gridPoints * sizeof(double), cudaMemcpyHostToDevice));
       CUDA_CHECK(cudaMemcpy(d_u_prev, d_u_curr, gridPoints * sizeof(double), cudaMemcpyDeviceToDevice));
 
-      dim3 blockSize(blockSizeDim, blockSizeDim);
-      dim3 gridSize((N + blockSizeDim - 1) / blockSizeDim, (N + blockSizeDim - 1) / blockSizeDim);
+      dim3 blockSize(blockSizeX, blockSizeY);
+      dim3 gridSize((N + blockSizeX - 1) / blockSizeX, (N + blockSizeY - 1) / blockSizeY);
       const int saveInterval = saveSnapshots ? (numSteps / 20) : 0;
       std::vector<double> snapshot_vector(gridPoints);
-      std::string fname = "sim/p1/sim_" + std::to_string(Lk) + "_b" + std::to_string(blockSizeDim) + ".txt";
+      std::string fname = "sim/p1/sim_" + std::to_string(Lk) + "_b" +
+          std::to_string(blockSizeX) + "x" + std::to_string(blockSizeY) + ".txt";
 
       cudaEvent_t start, stop;
       CUDA_CHECK(cudaEventCreate(&start));
@@ -185,8 +191,8 @@ void qA1(bool saveSnapshots)
       double updatesPerSecond =
           (interiorPoints * numSteps) / runtimeSeconds;
       double occupancyPercent =
-          kernel_occupancy_percent((const void*)wave2D_global, blockSizeDim * blockSizeDim);
-      std::cout << "Lk " << Lk << ", block " << blockSizeDim << "x" << blockSizeDim
+          kernel_occupancy_percent((const void*)wave2D_global, blockSizeX * blockSizeY);
+      std::cout << "Lk " << Lk << ", block " << blockSizeX << "x" << blockSizeY
                 << ": " << kernelMs << " ms"
                 << ", bandwidth " << bandwidthGBs << " GB/s"
                 << ", throughput " << updatesPerSecond << " updates/s"
@@ -195,8 +201,10 @@ void qA1(bool saveSnapshots)
       // Save final snapshot to results/p1/with_save or results/p1/without_save
       CUDA_CHECK(cudaDeviceSynchronize());
       std::string results_fname = saveSnapshots
-          ? ("results/p1/with_save/sim_" + std::to_string(Lk) + "_b" + std::to_string(blockSizeDim) + ".txt")
-          : ("results/p1/without_save/sim_" + std::to_string(Lk) + "_b" + std::to_string(blockSizeDim) + ".txt");
+          ? ("results/p1/with_save/sim_" + std::to_string(Lk) + "_b" +
+             std::to_string(blockSizeX) + "x" + std::to_string(blockSizeY) + ".txt")
+          : ("results/p1/without_save/sim_" + std::to_string(Lk) + "_b" +
+             std::to_string(blockSizeX) + "x" + std::to_string(blockSizeY) + ".txt");
       save_snapshot(d_u_curr, snapshot_vector, gridPoints, Lk, true, results_fname);
       CUDA_CHECK(cudaEventDestroy(start));
       CUDA_CHECK(cudaEventDestroy(stop));
