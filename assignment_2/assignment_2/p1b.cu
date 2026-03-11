@@ -228,15 +228,14 @@ void qA1(bool saveSnapshots)
       double runtimeSeconds = kernelMs / 1e3;
       double totalBytesTransferred = interiorPoints * numSteps * bytesPerGridUpdate;
       double bandwidthGBs = totalBytesTransferred / runtimeSeconds / 1e9;
-      double updateThroughputGUpdates =
-          (interiorPoints * numSteps) / runtimeSeconds / 1e9;
+      double updatesPerSecond =
+          (interiorPoints * numSteps) / runtimeSeconds;
       double occupancyPercent =
           kernel_occupancy_percent((const void*)wave2D_shared, blockSizeDim * blockSizeDim, sharedBytes);
       std::cout << "Lk " << Lk << ", block " << blockSizeDim << "x" << blockSizeDim
                 << ": " << kernelMs << " ms"
-                << ", steps " << numSteps
                 << ", bandwidth " << bandwidthGBs << " GB/s"
-                << ", throughput " << updateThroughputGUpdates << " GUpdates/s"
+                << ", throughput " << updatesPerSecond << " updates/s"
                 << ", occupancy " << occupancyPercent << "%" << std::endl;
 
       // Save final snapshot to results/p1b/with_save or results/p1b/without_save

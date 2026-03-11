@@ -42,8 +42,9 @@ def main():
     args = parser.parse_args()
     Lk = args.Lk
 
-    with_path = f"results/with_save/sim_{Lk}.txt"
-    without_path = f"results/without_save/sim_{Lk}.txt"
+    # with_path = f"results/with_save/sim_{Lk}.txt"
+    with_path = f"results/p2/without_save/sim_{Lk}_b16.txt"
+    without_path = f"results/p2/without_save/sim_{Lk}_b32.txt"
 
     with_grid = load_last_snapshot(with_path, Lk)
     without_grid = load_last_snapshot(without_path, Lk)

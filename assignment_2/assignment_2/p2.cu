@@ -264,17 +264,16 @@ void qA1(bool saveSnapshots)
       double runtimeSeconds = kernelMs / 1e3;
       double totalBytesTransferred = interiorPoints * numSteps * bytesPerGridUpdate;
       double bandwidthGBs = totalBytesTransferred / runtimeSeconds / 1e9;
-      double updateThroughputGUpdates =
-          (interiorPoints * numSteps) / runtimeSeconds / 1e9;
+      double updatesPerSecond =
+          (interiorPoints * numSteps) / runtimeSeconds;
       double occupancyPercent =
           kernel_occupancy_percent((const void*)wave2D_update_from_Laplacian,
                                    blockSizeDim * blockSizeDim);
       std::cout << "Lk " << Lk << ", block " << blockSizeDim << "x" << blockSizeDim
-                << ": " << kernelMs << " ms (cuSPARSE SpMV)"
-                << ", steps " << numSteps
+                << ": " << kernelMs << " ms"
                 << ", bandwidth " << bandwidthGBs << " GB/s"
-                << ", throughput " << updateThroughputGUpdates << " GUpdates/s"
-                << ", update-kernel occupancy " << occupancyPercent << "%" << std::endl;
+                << ", throughput " << updatesPerSecond << " updates/s"
+                << ", occupancy " << occupancyPercent << "%" << std::endl;
 
       // Save final snapshot to results/p2/with_save or results/p2/without_save
       CUDA_CHECK(cudaDeviceSynchronize());
