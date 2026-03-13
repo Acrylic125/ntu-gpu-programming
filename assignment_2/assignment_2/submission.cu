@@ -503,8 +503,11 @@ void qA2(bool saveSnapshots)
         if (step == 0)
           CUDA_CHECK(cudaEventRecord(start));
         size_t sharedBytes = (blockSizeDim + 2) * (blockSizeDim + 2) * sizeof(double);
-        wave2D_shared_with_single_tile_load<<<gridSize, blockSize, sharedBytes>>>(
-            d_u_prev, d_u_curr, d_u_next, N, lambda2);
+        // Comment this line to use the alternative kernel.
+        wave2D_shared<<<gridSize, blockSize, sharedBytes>>>(d_u_prev, d_u_curr, d_u_next, N, lambda2);
+        // Comment this line out to use the original kernel.
+        // wave2D_shared_with_single_tile_load<<<gridSize, blockSize, sharedBytes>>>(
+        //     d_u_prev, d_u_curr, d_u_next, N, lambda2);
         CUDA_CHECK(cudaGetLastError());
 
         // Cycle pointers to avoid memory allocation and deallocation.
@@ -524,9 +527,15 @@ void qA2(bool saveSnapshots)
       double bandwidthGBs = totalBytesTransferred / runtimeSeconds / 1e9;
       double updatesPerSecond =
           (interiorPoints * numSteps) / runtimeSeconds;
+        
+      // Comment this line out to use the alternative kernel.
       double occupancyPercent =
-          kernel_occupancy_percent((const void*)wave2D_shared_with_single_tile_load,
+          kernel_occupancy_percent((const void*)wave2D_shared,
                                    blockSizeDim * blockSizeDim, sharedBytes);
+      // Comment this line out to use the alternative kernel.
+      // double occupancyPercent =
+      //     kernel_occupancy_percent((const void*)wave2D_shared_with_single_tile_load,
+      //                              blockSizeDim * blockSizeDim, sharedBytes);
       std::cout << "Lk " << Lk << ", block " << blockSizeDim << "x" << blockSizeDim
                 << ": " << kernelMs << " ms"
                 << ", bandwidth " << bandwidthGBs << " GB/s"
