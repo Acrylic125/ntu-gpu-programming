@@ -603,8 +603,9 @@ void q2(bool saveSnapshots)
     const double bytesPerGridUpdate = 6.0 * sizeof(double);
     std::vector<int> rowPtr, colIdx;
     std::vector<double> values;
-    // Build sparse Laplacian in CSR on host 
-    // Example:
+    // Build sparse Laplacian in CSR on host.
+    // Example: for N = 4, the interior point (1, 1) has flat index 5.
+    // Its CSR row stores colIdx = [1, 9, 4, 6, 5], values = [1, 1, 1, 1, -4].
     build_Laplacian_CSR(N, rowPtr, colIdx, values);
     const int nnz = (int)values.size();
 
@@ -618,7 +619,7 @@ void q2(bool saveSnapshots)
     CUDA_CHECK(cudaMemcpy(d_values, values.data(), nnz * sizeof(double), cudaMemcpyHostToDevice));
 
     cusparseSpMatDescr_t matL = nullptr;
-    // Example:
+    // Just another way to represent the sparse matrix for us to use in cuSPARSE.
     CUSPARSE_CHECK(cusparseCreateCsr(
       &matL,
       (int64_t)N * N, (int64_t)N * N, (int64_t)nnz,
@@ -644,7 +645,8 @@ void q2(bool saveSnapshots)
 
       double one = 1.0, zero = 0.0;
       size_t bufferSize = 0;
-      // Example:
+      // Example: before multiplying a 16 x 16 sparse matrix by a 16-entry
+      // vector, ask cuSPARSE for the exact temporary buffer size it needs.
       CUSPARSE_CHECK(cusparseSpMV_bufferSize(
         cusparseHandle,
         CUSPARSE_OPERATION_NON_TRANSPOSE,
@@ -678,14 +680,14 @@ void q2(bool saveSnapshots)
           CUDA_CHECK(cudaEventRecord(start));
 
         CUSPARSE_CHECK(cusparseDnVecSetValues(vec_curr, d_u_curr));
-        // Example:
+        // Performs Lu = L * u_curr.
         CUSPARSE_CHECK(cusparseSpMV(
           cusparseHandle,
           CUSPARSE_OPERATION_NON_TRANSPOSE,
           &one, matL, vec_curr, &zero, vec_Lu,
           CUDA_R_64F, CUSPARSE_SPMV_ALG_DEFAULT, d_buffer
         ));
-        // Example:
+        // Use Lu to update the next wave field.
         wave2D_update_from_Laplacian<<<gridSize, blockSize>>>(
           d_u_prev, d_u_curr, d_Lu, d_u_next, N, lambda2
         );
