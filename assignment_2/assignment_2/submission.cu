@@ -147,64 +147,6 @@ void wave2D_shared(
   }
 }
 
-// Part 1b with shared memory optimizations and single tile load
-// Alternative implementation to reduce warp divergence.
-__global__
-void wave2D_shared_with_single_tile_load(
-  const double* prev,
-  const double* cur,
-  double* next,
-  int N,
-  double lambda2
-)
-{
-  const int j = blockIdx.x * blockDim.x + threadIdx.x;
-  const int i = blockIdx.y * blockDim.y + threadIdx.y;
-  const int tx = threadIdx.x;
-  const int ty = threadIdx.y;
-  const int tilePitch = blockDim.x + 2;
-  const int tileHeight = blockDim.y + 2;
-  const int tileElements = tilePitch * tileHeight;
-
-  extern __shared__ double tile[];
-
-  if (tx == 0) {
-    for (int linearIdx = ty; linearIdx < tileElements; linearIdx += blockDim.y) {
-      int localRow = linearIdx / tilePitch;
-      int localCol = linearIdx % tilePitch;
-      int globalI = blockIdx.y * blockDim.y + localRow - 1;
-      int globalJ = blockIdx.x * blockDim.x + localCol - 1;
-
-      tile[linearIdx] = (globalI >= 0 && globalI < N && globalJ >= 0 && globalJ < N)
-          ? cur[globalI * N + globalJ]
-          : 0.0;
-    }
-  }
-
-  __syncthreads();
-
-  if (i > 0 && i < N - 1 && j > 0 && j < N - 1)
-  {
-    const int idx = i * N + j;
-
-    double center = tile[(ty + 1) * tilePitch + (tx + 1)];
-    double up     = tile[ty * tilePitch + (tx + 1)];
-    double down   = tile[(ty + 2) * tilePitch + (tx + 1)];
-    double left   = tile[(ty + 1) * tilePitch + tx];
-    double right  = tile[(ty + 1) * tilePitch + (tx + 2)];
-
-    next[idx] =
-        2.0 * center
-        - prev[idx]
-        + lambda2 * (up + down + left + right - 4.0 * center);
-  }
-
-  if (i < N && j < N && (i == 0 || i == N - 1 || j == 0 || j == N - 1))
-  {
-    next[i * N + j] = 0.0;
-  }
-}
-
 // Part 2 with cuSPARSE for Laplacian matrix
 __global__
 void wave2D_update_from_Laplacian(
@@ -440,7 +382,7 @@ void qA2(bool saveSnapshots)
   // Block sizes to test (For verification only)
   // Using what we got from A1, we will stick to 16.
   int blockSizes[] = {
-    16, 32
+    16
   };
   double dx = 0.01;
   double dy = 0.01;
@@ -503,11 +445,7 @@ void qA2(bool saveSnapshots)
         if (step == 0)
           CUDA_CHECK(cudaEventRecord(start));
         size_t sharedBytes = (blockSizeDim + 2) * (blockSizeDim + 2) * sizeof(double);
-        // Comment this line to use the alternative kernel.
         wave2D_shared<<<gridSize, blockSize, sharedBytes>>>(d_u_prev, d_u_curr, d_u_next, N, lambda2);
-        // Comment this line out to use the original kernel.
-        // wave2D_shared_with_single_tile_load<<<gridSize, blockSize, sharedBytes>>>(
-        //     d_u_prev, d_u_curr, d_u_next, N, lambda2);
         CUDA_CHECK(cudaGetLastError());
 
         // Cycle pointers to avoid memory allocation and deallocation.
@@ -532,10 +470,6 @@ void qA2(bool saveSnapshots)
       double occupancyPercent =
           kernel_occupancy_percent((const void*)wave2D_shared,
                                    blockSizeDim * blockSizeDim, sharedBytes);
-      // Comment this line out to use the alternative kernel.
-      // double occupancyPercent =
-      //     kernel_occupancy_percent((const void*)wave2D_shared_with_single_tile_load,
-      //                              blockSizeDim * blockSizeDim, sharedBytes);
       std::cout << "Lk " << Lk << ", block " << blockSizeDim << "x" << blockSizeDim
                 << ": " << kernelMs << " ms"
                 << ", bandwidth " << bandwidthGBs << " GB/s"
@@ -576,7 +510,7 @@ void q2(bool saveSnapshots)
   // Block sizes to test, only used by update kernel.
   // Again, using what we got from A1, we will stick to 16.
   int blockSizes[] = {
-    16, 32
+    16
   };
   double dx = 0.01;
   double dy = 0.01;
@@ -760,7 +694,7 @@ int main(int argc, char* argv[])
   bool saveSnapshots = (argc >= 2 && std::string(argv[1]) == "true");
 
   qA1(saveSnapshots);
-  qA2(saveSnapshots);
-  q2(saveSnapshots);
+  // qA2(saveSnapshots);
+  // q2(saveSnapshots);
   return 0;
 }

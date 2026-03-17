@@ -134,7 +134,7 @@ void qA1(bool saveSnapshots)
     1, 2, 4, 8
   };
   int blockSizes[] = {
-    16, 32
+    16
   };
   double dx = 0.01;
   double dy = 0.01;
