@@ -40,7 +40,7 @@ def load_sim(path: Path):
 
 
 def discover_sim_files(root: Path):
-    return sorted(root.rglob("sim/**/*.txt"))
+    return sorted(root.rglob("sim/p2/**/*.txt"))
 
 
 def make_title(path: Path, lk: int) -> str:
@@ -70,6 +70,12 @@ def main():
         type=int,
         default=10,
         help="Frames per second for the exported MP4.",
+    )
+    parser.add_argument(
+        "--time",
+        type=float,
+        default=None,
+        help="Export duration in seconds. Example: --time 10 makes a 10-second MP4.",
     )
     parser.add_argument(
         "--interval",
@@ -107,7 +113,14 @@ def main():
     if not simulations:
         raise SystemExit(f"No valid simulation frames found under {args.root}")
 
-    frame_count = max(len(sim["frames"]) for sim in simulations)
+    source_frame_count = max(len(sim["frames"]) for sim in simulations)
+    if args.time is not None:
+        if args.time <= 0:
+            raise SystemExit("--time must be greater than 0")
+        frame_count = max(1, int(round(args.time * args.fps)))
+    else:
+        frame_count = source_frame_count
+
     cols = math.ceil(math.sqrt(len(simulations)))
     rows = math.ceil(len(simulations) / cols)
 
@@ -137,7 +150,12 @@ def main():
         updated = []
         for im, sim in zip(artists, simulations):
             frames = sim["frames"]
-            current = frames[min(frame_idx, len(frames) - 1)]
+            if frame_count == 1 or len(frames) == 1:
+                source_idx = 0
+            else:
+                progress = frame_idx / (frame_count - 1)
+                source_idx = int(round(progress * (len(frames) - 1)))
+            current = frames[source_idx]
             im.set_data(current)
             updated.append(im)
         return updated
