@@ -54,7 +54,8 @@ run-single: build
 # Profile with Nsight Systems.
 profile: build
 	@mkdir -p $(OUTPUT_DIR)
-	nsys profile --trace=cuda,nvtx --output=pipeline_profile \
+	@mkdir -p log
+	nsys profile --trace=cuda,nvtx --output=log/pipeline_profile \
 	    ./$(TARGET) --input $(INPUT_DIR) --output $(OUTPUT_DIR)
 	@echo "Profile saved to pipeline_profile.nsys-rep"
 	@echo "Open with: nsys-ui pipeline_profile.nsys-rep"

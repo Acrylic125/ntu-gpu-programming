@@ -81,9 +81,11 @@ static void process_batch_on_device(std::vector<ImageEntry>& sub_batch, int devi
         // TODO: Stage 1 Launch gaussianBlurKernel on streams[i].
         //   Grid: ceil(W/TILE_W) x ceil(H/TILE_H) blocks, TILE_W x TILE_H threads.
         gaussianBlurKernel<<<grid, block, 0, streams[i]>>>(d_in[i], d_blur[i], W, H);
+        // gaussianBlurKernel<<<grid, block, 0, streams[i]>>>(d_in[i], d_out[i], W, H);
 
         // TODO: Stage 2 Launch sobelKernel on streams[i].
         sobelKernel<<<grid, block, 0, streams[i]>>>(d_blur[i], d_edge[i], W, H);
+        // sobelKernel<<<grid, block, 0, streams[i]>>>(d_blur[i], d_out[i], W, H);
 
         // TODO: Zero-initialise d_hist[i] with cudaMemsetAsync on streams[i].
         cudaMemsetAsync(d_hist[i], 0, hist_bytes, streams[i]);
@@ -119,13 +121,15 @@ static void process_batch_on_device(std::vector<ImageEntry>& sub_batch, int devi
                         cudaMemcpyDeviceToHost, streams[i]);
     }
 
-    // Need cdf_min from host before stage 3C.
     for (int i = 0; i < n_images; i++) {
         cudaStreamSynchronize(streams[i]);
 
         float cdf_min = 0.f;
         for (int b = 0; b < 256; b++) {
-            if (h_cdf[i][b] > 0.f) { cdf_min = h_cdf[i][b]; break; }
+            if (h_cdf[i][b] > 0.f) {
+                cdf_min = h_cdf[i][b];
+                break;
+            }
         }
 
         // TODO: Stage 3C Launch equalizeKernel on streams[i].
