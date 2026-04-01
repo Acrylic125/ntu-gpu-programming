@@ -1,0 +1,25 @@
+#!/bin/bash
+
+#PBS -l select=1:mpiprocs=1:ngpus=1
+#PBS -l place=scatter
+#PBS -l walltime=4:00:00
+#PBS -o log/
+#PBS -j oe
+#PBS -P personal-btan138
+#PBS -q normal
+#PBS -N a3_nsys
+
+cd $PBS_O_WORKDIR || exit $? 
+[ -d log ] || mkdir log  
+module load cuda/12.2.2
+module avail nvidia
+
+echo $CUDA_VISIBLE_DEVICES
+which nvcc
+nvcc --version
+
+make clean
+make build
+nsys profile --trace=cuda,nvtx --output=log/pipeline_profile \
+    ./pipeline --input data/input --output output
+
