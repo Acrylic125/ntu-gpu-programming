@@ -77,7 +77,6 @@ static void process_batch_on_device(std::vector<ImageEntry>& sub_batch, int devi
         cudaMemcpyAsync(d_in[i], sub_batch[i].host_in, img_bytes,
                         cudaMemcpyHostToDevice, streams[i]);
 
-
         // TODO: Stage 1 Launch gaussianBlurKernel on streams[i].
         //   Grid: ceil(W/TILE_W) x ceil(H/TILE_H) blocks, TILE_W x TILE_H threads.
         gaussianBlurKernel<<<grid, block, 0, streams[i]>>>(d_in[i], d_blur[i], W, H);
@@ -144,7 +143,6 @@ static void process_batch_on_device(std::vector<ImageEntry>& sub_batch, int devi
     // ── Wait for all images to finish ─────────────────────────────────────
     // TODO: cudaStreamSynchronize each stream.
     for (int i = 0; i < n_images; i++) cudaStreamSynchronize(streams[i]);
-
 
     // ── Save results ──────────────────────────────────────────────────────
     for (int i = 0; i < n_images; i++) {

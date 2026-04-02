@@ -155,7 +155,30 @@ __global__ void sobelKernel(
 
     if (x >= width || y >= height) return;
 
-    // Clamp helper - returns pixel value at (px, py) with edge clamping.
+    // auto px = [&](int px, int py) -> int {
+    //     px = min(max(px, 0), width - 1);
+    //     py = min(max(py, 0), height - 1);
+    //     return in[py * width + px];
+    // };
+
+    // // 3x3 neighbourhood
+    // int p00 = px(x-1,y-1), p10 = px(x,y-1), p20 = px(x+1,y-1);
+    // int p01 = px(x-1,y  ), p11 = px(x,y  ), p21 = px(x+1,y  );
+    // int p02 = px(x-1,y+1), p12 = px(x,y+1), p22 = px(x+1,y+1);
+
+    // // Sobel X and Y responses.
+    // int gx =
+    //     - p00 + p20
+    //     -2 * p01 + 2 * p21
+    //     - p02 + p22;
+
+    // int gy =
+    //     p00 + 2 * p10 + p20 +
+    //     -p02 + -2 * p12 + -p22;
+
+    // int squared = gx * gx + gy * gy;
+    // double mag = sqrtf((double) squared);
+    // out[y * width + x] = (uint8_t)min(max((int)roundf(mag), 0), 255);
     auto px = [&](int px, int py) -> float {
         px = min(max(px, 0), width - 1);
         py = min(max(py, 0), height - 1);
@@ -169,19 +192,18 @@ __global__ void sobelKernel(
 
     // Sobel X and Y responses.
     float gx =
-        -1.0f * p00 + 0.0f * p10 + 1.0f * p20 +
-        -2.0f * p01 + 0.0f * p11 + 2.0f * p21 +
-        -1.0f * p02 + 0.0f * p12 + 1.0f * p22;
+        - p00 + p20
+        -2 * p01 + 2 * p21
+        - p02 + p22;
 
     float gy =
-         1.0f * p00 + 2.0f * p10 + 1.0f * p20 +
-         0.0f * p01 + 0.0f * p11 + 0.0f * p21 +
-        -1.0f * p02 + -2.0f * p12 + -1.0f * p22;
+        p00 + 2 * p10 + p20 +
+        -p02 + -2 * p12 + -p22;
 
-    float mag = sqrtf(gx * gx + gy * gy);
-    int out_val = (int)roundf(mag);
-    out_val = out_val < 0 ? 0 : (out_val > 255 ? 255 : out_val);
-    out[y * width + x] = (uint8_t)out_val;
+    float squared = gx * gx + gy * gy;
+    float mag = sqrtf(squared);
+    out[y * width + x] = (uint8_t)min(max((int)mag, 0), 255);
+    // out[y * width + x] = (uint8_t)min(max((int)roundf(mag), 0), 255);
 }
 
 
@@ -239,29 +261,67 @@ __global__ void histogramKernel(
 __global__ void equalizeKernel(
     const uint8_t* __restrict__ in,
     uint8_t*       __restrict__ out,
-    const float*   cdf,
+    const float*   __restrict__ cdf,
     float          cdf_min,
     int width, int height)
 {
-    // TODO: Read the input pixel, apply the equalisation formula,
-    //   clamp to [0, 255], cast to uint8_t, and write to `out`.
-    //   Total pixels = width * height.
-    const int total = width * height;
-    const int linear_tid =
-        (blockIdx.y * gridDim.x + blockIdx.x) * (blockDim.x * blockDim.y) +
+    const size_t total = (size_t)width * height;
+
+    const size_t tid =
+        (size_t)(blockIdx.y * gridDim.x + blockIdx.x) *
+        (blockDim.x * blockDim.y) +
         (threadIdx.y * blockDim.x + threadIdx.x);
-    const int stride = gridDim.x * gridDim.y * blockDim.x * blockDim.y;
+
+    const size_t stride =
+        (size_t)gridDim.x * gridDim.y *
+        blockDim.x * blockDim.y;
+
     const float denom = (float)total - cdf_min;
 
-    for (int i = linear_tid; i < total; i += stride) {
-        const uint8_t old_val = in[i];
+    for (size_t i = tid; i < total; i += stride) {
+        const uint8_t val = in[i];
+
         float mapped = 0.0f;
+
         if (denom > 0.0f) {
-            mapped = ((cdf[(int)old_val] - cdf_min) / denom) * 255.0f;
+            // Exclusive CDF: number of pixels strictly less than val
+            mapped = (cdf[val] - cdf_min) / denom;
+            mapped = mapped * 255.0f;
         }
 
-        int out_val = (int)roundf(mapped);
-        out_val = out_val < 0 ? 0 : (out_val > 255 ? 255 : out_val);
+        // Round and clamp
+        int out_val = (int)(mapped + 0.5f);  // faster than roundf
+        out_val = max(0, min(255, out_val));
+
         out[i] = (uint8_t)out_val;
     }
 }
+// __global__ void equalizeKernel(
+//     const uint8_t* __restrict__ in,
+//     uint8_t*       __restrict__ out,
+//     const float*   cdf,
+//     float          cdf_min,
+//     int width, int height)
+// {
+//     // TODO: Read the input pixel, apply the equalisation formula,
+//     //   clamp to [0, 255], cast to uint8_t, and write to `out`.
+//     //   Total pixels = width * height.
+//     const int total = width * height;
+//     const int linear_tid =
+//         (blockIdx.y * gridDim.x + blockIdx.x) * (blockDim.x * blockDim.y) +
+//         (threadIdx.y * blockDim.x + threadIdx.x);
+//     const int stride = gridDim.x * gridDim.y * blockDim.x * blockDim.y;
+//     const float denom = (float)total - cdf_min;
+
+//     for (int i = linear_tid; i < total; i += stride) {
+//         const uint8_t old_val = in[i];
+//         float mapped = 0.0f;
+//         if (denom > 0.0f) {
+//             mapped = ((cdf[(int)old_val] - cdf_min) / denom) * 255.0f;
+//         }
+
+//         int out_val = (int)roundf(mapped);
+//         out_val = out_val < 0 ? 0 : (out_val > 255 ? 255 : out_val);
+//         out[i] = (uint8_t)out_val;
+//     }
+// }

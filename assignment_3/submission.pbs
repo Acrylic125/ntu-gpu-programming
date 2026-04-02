@@ -21,8 +21,8 @@ nvcc --version
 rm -f log/pipeline_profile.nsys-rep
 
 make clean
-make build
+# make build
 make check
-nsys profile --trace=cuda,nvtx --output=log/pipeline_profile \
-    ./pipeline --input data/input --output output
+# nsys profile --trace=cuda,nvtx --output=log/pipeline_profile \
+#     ./pipeline --input data/input --output output
 
