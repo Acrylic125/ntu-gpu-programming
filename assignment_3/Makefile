@@ -62,7 +62,7 @@ profile: build
 
 # Diff outputs against reference images.
 # Allows ±2 intensity levels per pixel (accounts for floating-point rounding).
-check: run-single
+check: run
 	@echo "Checking outputs against reference..."
 	@python3 scripts/check_outputs.py \
 	    --output $(OUTPUT_DIR) \
