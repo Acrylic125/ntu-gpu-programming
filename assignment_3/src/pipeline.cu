@@ -155,30 +155,6 @@ __global__ void sobelKernel(
 
     if (x >= width || y >= height) return;
 
-    // auto px = [&](int px, int py) -> int {
-    //     px = min(max(px, 0), width - 1);
-    //     py = min(max(py, 0), height - 1);
-    //     return in[py * width + px];
-    // };
-
-    // // 3x3 neighbourhood
-    // int p00 = px(x-1,y-1), p10 = px(x,y-1), p20 = px(x+1,y-1);
-    // int p01 = px(x-1,y  ), p11 = px(x,y  ), p21 = px(x+1,y  );
-    // int p02 = px(x-1,y+1), p12 = px(x,y+1), p22 = px(x+1,y+1);
-
-    // // Sobel X and Y responses.
-    // int gx =
-    //     - p00 + p20
-    //     -2 * p01 + 2 * p21
-    //     - p02 + p22;
-
-    // int gy =
-    //     p00 + 2 * p10 + p20 +
-    //     -p02 + -2 * p12 + -p22;
-
-    // int squared = gx * gx + gy * gy;
-    // double mag = sqrtf((double) squared);
-    // out[y * width + x] = (uint8_t)min(max((int)roundf(mag), 0), 255);
     auto px = [&](int px, int py) -> float {
         px = min(max(px, 0), width - 1);
         py = min(max(py, 0), height - 1);
@@ -191,14 +167,8 @@ __global__ void sobelKernel(
     float p02 = px(x-1,y+1), p12 = px(x,y+1), p22 = px(x+1,y+1);
 
     // Sobel X and Y responses.
-    float gx =
-        - p00 + p20
-        -2 * p01 + 2 * p21
-        - p02 + p22;
-
-    float gy =
-        p00 + 2 * p10 + p20 +
-        -p02 + -2 * p12 + -p22;
+    float gx = -p00 + p20 - 2 * p01 + 2 * p21 - p02 + p22;
+    float gy = p00 + 2 * p10 + p20 - p02 - 2 * p12 - p22;
 
     float squared = gx * gx + gy * gy;
     float mag = sqrtf(squared);
@@ -284,13 +254,12 @@ __global__ void equalizeKernel(
         float mapped = 0.0f;
 
         if (denom > 0.0f) {
-            // Exclusive CDF: number of pixels strictly less than val
             mapped = (cdf[val] - cdf_min) / denom;
             mapped = mapped * 255.0f;
         }
 
         // Round and clamp
-        int out_val = (int)(mapped + 0.5f);  // faster than roundf
+        int out_val = (int) roundf(mapped);  
         out_val = max(0, min(255, out_val));
 
         out[i] = (uint8_t)out_val;

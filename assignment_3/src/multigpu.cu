@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <thread>
 #include <vector>
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
@@ -188,15 +189,17 @@ void run_pipeline_multigpu(std::vector<ImageEntry>& batch)
 
     // TODO: Split `batch` into two sub-batches.
     //   GPU 0 gets the first N/2 images; GPU 1 gets the remainder.
+    //   process_batch_on_device(sub0, 0);
+    //   process_batch_on_device(sub1, 1);
     const size_t mid = batch.size() / 2;
     std::vector<ImageEntry> sub0(batch.begin(), batch.begin() + mid);
     std::vector<ImageEntry> sub1(batch.begin() + mid, batch.end());
 
-    // TODO: Process sub0 on GPU 0, then sub1 on GPU 1.
-    //   process_batch_on_device(sub0, 0);
-    //   process_batch_on_device(sub1, 1);
-    process_batch_on_device(sub0, 0);
-    process_batch_on_device(sub1, 1);
+    std::thread gpu0_thread([&sub0] { process_batch_on_device(sub0, 0); });
+    std::thread gpu1_thread([&sub1] { process_batch_on_device(sub1, 1); });
+
+    gpu0_thread.join();
+    gpu1_thread.join();
 }
 
 void run_pipeline_singlegpu(std::vector<ImageEntry>& batch)
